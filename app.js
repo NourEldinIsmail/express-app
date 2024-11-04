@@ -37,7 +37,7 @@ app.get('/lessons', async (req, res) => {
                     { Sport: { $regex: req.query.search, $options: 'i' } },
                     { Location: { $regex: req.query.search, $options: 'i' } },
                     { Price: { $regex: req.query.search, $options: 'i' } },
-                    { Spaces: { $regex: req.query.search, $options: 'i' } }
+                    { Spaces: { $regex: new RegExp(`^${req.query.search}$`, 'i') } }
                 ]
             }).toArray();
             res.json(lessons);
@@ -64,18 +64,24 @@ app.post('/order', async (req, res) => {
 });
 
 app.put('/lesson/:id', async (req, res) => {
-    if (!req.query.spaces) {
-        res.status(400).json({ message: "Spaces query parameter is required" });
+    const updateFields = req.body;
+
+    if (Object.keys(updateFields).length === 0) {
+        res.status(400).json({ message: "No fields to update" });
         return;
     }
-    if (isNaN(Number(req.query.spaces))) {
-        res.status(400).json({ message: "Spaces query parameter must be a number" });
-        return;
-    }
+
     try {
         const db = getDB();
-        const result = await db.collection('lessons').updateOne({ id: Number(req.params.id) }, { $set: { Spaces: Number(req.query.spaces) } });
+        const result = await db.collection('lessons').updateOne(
+            { id: Number(req.params.id) },
+            { $set: updateFields }
+        );
+        if (result.matchedCount === 0) {
+            res.status(404).json({ message: "Lesson not found" });
+        } else {
         res.json(result);
+        }
     } catch (error) {
         res.status(500).json({ message: "Failed to update lesson", error });
     }
