@@ -14,6 +14,7 @@ const logger = (req, res, next) => {
   next();
 };
 
+app.use(cors()); 
 app.use(express.json());
 app.use(logger);
 app.use('/images', express.static('images'));
