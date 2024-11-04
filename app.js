@@ -24,9 +24,23 @@ app.use('/images', (req, res) => {
 
 app.get('/lessons', async (req, res) => {
     try {
-        const db = getDB();
-        const lessons = await db.collection('lessons').find().toArray();
-        res.json(lessons);
+        if (req.query.search) {
+            const db = getDB();
+            const lessons = await db.collection('lessons').find({
+                $or: [
+                    { Sport: { $regex: req.query.search, $options: 'i' } },
+                    { Location: { $regex: req.query.search, $options: 'i' } },
+                    { Price: { $regex: req.query.search, $options: 'i' } },
+                    { Spaces: { $regex: req.query.search, $options: 'i' } }
+                ]
+            }).toArray();
+            res.json(lessons);
+        }
+        else{
+            const db = getDB();
+            const lessons = await db.collection('lessons').find().toArray();
+            res.json(lessons);
+        }
     } catch (error) {
         res.status(500).json({ message: "Failed to fetch lessons", error });
     }
