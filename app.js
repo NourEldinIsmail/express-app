@@ -22,6 +22,12 @@ app.use('/images', (req, res) => {
     res.status(404).json({ message: 'Image not found' });
 });
 
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 app.get('/lessons', async (req, res) => {
     try {
         if (req.query.search) {
