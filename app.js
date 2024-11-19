@@ -1,95 +1,95 @@
 const express = require('express');
-const dotenv = require('dotenv');
-const { connectDB, getDB } = require('./config/db');
-const cors = require('cors');
-
-dotenv.config();
-
 const app = express();
+const { MongoClient } = require('mongodb');
+const dotenv = require('dotenv');
+dotenv.config();
+const mongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING);
+let db;
 
-connectDB();
-
-const logger = (req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(req.method, req.hostname, req.path, timestamp);
-  next();
+const startConnection = async () => {
+    await mongoClient.connect();
+    db = mongoClient.db('sports-project');
+    console.log("Connection to Database established");
 };
 
-app.use(cors()); 
-app.use(express.json());
-app.use(logger);
-app.use('/images', express.static('images'));
+startConnection();
 
-app.use('/images', (req, res) => {
-    res.status(404).json({ message: 'Image not found' });
-});
-
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+const requestLogger = (req, res, next) => {
+    const timestamp = new Date().toLocaleString();
+    console.log(`[${timestamp}] ${req.method} request to ${req.path}`);
+    console.log('Request body:', req.body);
     next();
-});
+};
 
-app.get('/lessons', async (req, res) => {
-    try {
-        if (req.query.search) {
-            const db = getDB();
-            const lessons = await db.collection('lessons').find({
-                $or: [
-                    { Sport: { $regex: req.query.search, $options: 'i' } },
-                    { Location: { $regex: req.query.search, $options: 'i' } },
-                    { Price: { $regex: req.query.search, $options: 'i' } },
-                    { Spaces: { $regex: new RegExp(`^${req.query.search}$`, 'i') } }
-                ]
-            }).toArray();
-            res.json(lessons);
-        }
-        else{
-            const db = getDB();
-            const lessons = await db.collection('lessons').find().toArray();
-            res.json(lessons);
-        }
-    } catch (error) {
-        res.status(500).json({ message: "Failed to fetch lessons", error });
-    }
-});
+const allowCrossDomain = (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+};
+
+app.use(allowCrossDomain);
+app.use(express.json());
+app.use(requestLogger);
+app.use('/images', express.static('images'));
 
 app.post('/order', async (req, res) => {
     try {
-        const db = getDB();
         const order = req.body;
         const result = await db.collection('orders').insertOne(order);
         res.json(result);
     } catch (error) {
-        res.status(500).json({ message: "Failed to insert order", error });
+        res.status(500).json({ message: "Order coudn't be placed", error });
     }
 });
 
-app.put('/lesson/:id', async (req, res) => {
-    const updateFields = req.body;
-
-    if (Object.keys(updateFields).length === 0) {
-        res.status(400).json({ message: "No fields to update" });
-        return;
+app.put('/lesson', async (req, res) => {
+    if (!req.body.id) {
+        res.status(400).json({ message: "Missing id field" });
     }
 
     try {
-        const db = getDB();
         const result = await db.collection('lessons').updateOne(
-            { id: Number(req.params.id) },
-            { $set: updateFields }
+            { id: Number(req.body.id) },
+            { $set: req.body }
         );
         if (result.matchedCount === 0) {
-            res.status(404).json({ message: "Lesson not found" });
+            res.status(404).json({ message: "There is no lesson with this id" });
         } else {
-        res.json(result);
+            res.json(result);
         }
     } catch (error) {
-        res.status(500).json({ message: "Failed to update lesson", error });
+        res.status(500).json({ message: "Lesson coudn't be updated", error });
     }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.get('/lessons', async (req, res) => {
+  try {
+    const lessons = await db.collection('lessons').find().toArray();
+    res.json(lessons);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to retrieve lessons", error });
+  }
+});
+
+app.get('/search', async (req, res) => {
+  try {
+    const stringRegex = new RegExp(req.query.q, 'i');
+    const numRegex = new RegExp(`^${req.query.q}$`, 'i');
+    const lessons = await db.collection('lessons').find({
+      $or: [
+        { Sport: { $regex: stringRegex } },
+        { Location: { $regex: stringRegex } },
+        { Price: { $regex: stringRegex } },
+        { Spaces: { $regex: numRegex } }
+      ]
+    }).toArray();
+    res.json(lessons);
+  } catch (error) {
+    res.status(500).json({ message: "Search failed", error });
+  }
+});
+
+app.listen(5000, () => {
+  console.log(`Server running on port 5000`);
 });
